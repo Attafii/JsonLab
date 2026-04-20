@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Code2, Cpu, Sparkles, WandSparkles } from 'lucide-react';
 
+import { GithubStarsButton } from '@/components/github-stars-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -61,9 +62,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <div className="hidden rounded-full border border-border/80 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground shadow-sm md:block">
-            Structured JSON workspace
-          </div>
+          <GithubStarsButton />
           <ThemeToggle />
         </div>
       </div>
