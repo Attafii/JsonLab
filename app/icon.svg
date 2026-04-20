@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9" />
+      <stop offset="0.55" stop-color="#06B6D4" />
+      <stop offset="1" stop-color="#10B981" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(20 18) rotate(45) scale(40 32)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#bg)" />
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#glow)" />
+  <path d="M27 18H24C21.7909 18 20 19.7909 20 22V26C20 27.6569 18.6569 29 17 29C18.6569 29 20 30.3431 20 32C20 33.6569 18.6569 35 17 35C18.6569 35 20 36.3431 20 38V42C20 44.2091 21.7909 46 24 46H27" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M37 18H40C42.2091 18 44 19.7909 44 22V26C44 27.6569 45.3431 29 47 29C45.3431 29 44 30.3431 44 32C44 33.6569 45.3431 35 47 35C45.3431 35 44 36.3431 44 38V42C44 44.2091 42.2091 46 40 46H37" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="32" cy="32" r="4" fill="#FFFFFF" />
+</svg>

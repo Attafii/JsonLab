@@ -34,11 +34,8 @@ export function SiteHeader() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-semibold tracking-tight">JsonLab</h1>
-              <Badge variant="secondary" className="rounded-full px-2 py-0 text-[10px] uppercase tracking-[0.24em]">
-                Next 14
-              </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">A modern JSON workbench with validation, diffing, and generators.</p>
+            <p className="text-xs text-muted-foreground">A focused JSON workbench with validation, diffing, and generators.</p>
           </div>
         </div>
 
@@ -65,7 +62,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <div className="hidden rounded-full border border-border/80 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground shadow-sm md:block">
-            Framer Motion • Tailwind • shadcn/ui
+            Structured JSON workspace
           </div>
           <ThemeToggle />
         </div>

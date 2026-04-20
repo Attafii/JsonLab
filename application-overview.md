@@ -113,8 +113,8 @@ In code-fix mode, the assistant reviews a snippet and returns a corrected versio
 ### AI Transport
 
 - Requests go through `/api/ai`.
-- The route uses the NVIDIA AI integration configured by environment variables.
-- The app expects a local `.env.local` file with `NVIDIA_API_KEY` and optionally `NVIDIA_AI_MODEL`.
+- The route can use an optional remote provider configured through environment variables.
+- The app can read a local `.env.local` file with `AI_API_KEY`, `AI_MODEL`, and `AI_API_URL` when remote assistance is enabled.
 
 ## Mock Data Route
 
@@ -151,12 +151,12 @@ JSON Master is useful when working with structured data that needs to be underst
 
 ## Technical Shape Of The App
 
-The implementation is a Next.js 14 application with a client-heavy workspace.
+The implementation is a client-heavy TypeScript application with a polished workspace.
 
-- React and Next.js App Router power the routes.
+- React powers the routes and shared workspace.
 - Zustand stores the shared JSON, schema, view, theme, and history state.
 - Monaco Editor handles structured editing.
-- Framer Motion provides subtle transitions.
+- Subtle transitions provide polish.
 - The tree and diff views use recursive rendering and virtualization to stay usable on larger documents.
 
 ## Summary

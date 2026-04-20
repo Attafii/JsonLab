@@ -33,7 +33,7 @@ export function MockDataWorkbench() {
   const [count, setCount] = useState(3);
   const [result, setResult] = useState(() => generateMockJsonText(defaultTemplate));
   const [loading, setLoading] = useState(false);
-  const [provider, setProvider] = useState<'local' | 'nvidia'>('local');
+  const [provider, setProvider] = useState<'local' | 'remote'>('local');
   const [error, setError] = useState<string | null>(null);
 
   const recordLabel = useMemo(() => `${count} record${count === 1 ? '' : 's'}`, [count]);
@@ -64,7 +64,7 @@ export function MockDataWorkbench() {
         })
       });
 
-      const payload = (await response.json()) as { response?: string; provider?: 'local' | 'nvidia'; error?: string };
+      const payload = (await response.json()) as { response?: string; provider?: 'local' | 'remote'; error?: string };
       setResult(payload.response ?? '');
       setProvider(payload.provider ?? 'local');
       if (payload.error) {
@@ -102,7 +102,7 @@ export function MockDataWorkbench() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={provider === 'nvidia' ? 'success' : 'secondary'} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            <Badge variant={provider === 'remote' ? 'success' : 'secondary'} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
               {provider}
             </Badge>
             <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">

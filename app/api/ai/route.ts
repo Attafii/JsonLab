@@ -53,11 +53,11 @@ function localResponse(body: AiRequestBody) {
 }
 
 async function tryRemoteAiResponse(body: AiRequestBody) {
-  const apiKey = process.env.NVIDIA_API_KEY;
-  const model = process.env.NVIDIA_AI_MODEL ?? 'meta/llama-3.3-70b-instruct';
-  const apiUrl = process.env.NVIDIA_AI_URL ?? 'https://integrate.api.nvidia.com/v1/chat/completions';
+  const apiKey = process.env.AI_API_KEY;
+  const model = process.env.AI_MODEL;
+  const apiUrl = process.env.AI_API_URL;
 
-  if (!apiKey) {
+  if (!apiKey || !model || !apiUrl) {
     return null;
   }
 
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
   try {
     const remoteResponse = await tryRemoteAiResponse(body);
     const response = remoteResponse ?? localResponse(body);
-    return NextResponse.json({ response, provider: remoteResponse ? 'nvidia' : 'local' });
+    return NextResponse.json({ response, provider: remoteResponse ? 'remote' : 'local' });
   } catch (error) {
     return NextResponse.json(
       {

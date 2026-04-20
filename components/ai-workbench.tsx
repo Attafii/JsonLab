@@ -22,7 +22,7 @@ export function AiWorkbench() {
 }`);
   const [instruction, setInstruction] = useState('Make the snippet safer and more concise.');
   const [response, setResponse] = useState('');
-  const [provider, setProvider] = useState<'local' | 'nvidia'>('local');
+  const [provider, setProvider] = useState<'local' | 'remote'>('local');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +47,7 @@ export function AiWorkbench() {
         body: JSON.stringify(activePayload)
       });
 
-      const payload = (await apiResponse.json()) as { response?: string; provider?: 'local' | 'nvidia'; error?: string };
+      const payload = (await apiResponse.json()) as { response?: string; provider?: 'local' | 'remote'; error?: string };
       setResponse(payload.response ?? 'No response was returned.');
       setProvider(payload.provider ?? 'local');
       if (payload.error) {
@@ -80,7 +80,7 @@ export function AiWorkbench() {
             </div>
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Ask about the app or repair a code snippet without leaving JsonLab.</h2>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              The route is ready for NVIDIA credentials when they are configured, and it falls back to a local helper so the workflow still functions in every environment.
+              The route can connect to a remote provider when configured, and it falls back to a local helper so the workflow still functions in every environment.
             </p>
           </div>
 
@@ -144,7 +144,7 @@ export function AiWorkbench() {
                 Run assistant
               </Button>
               <Badge variant="secondary" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
-                NVIDIA_API_KEY optional
+                Remote source optional
               </Badge>
             </div>
 
@@ -168,7 +168,7 @@ export function AiWorkbench() {
               <ScrollArea className="json-scrollbar max-h-[620px]">
                 <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={provider === 'nvidia' ? 'success' : 'secondary'} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+                    <Badge variant={provider === 'remote' ? 'success' : 'secondary'} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
                       {provider}
                     </Badge>
                     <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">{mode}</Badge>
