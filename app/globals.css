@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 220 33% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 16% 93%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 16% 95%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 162 84% 39%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 28 30% 14%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 199 89% 48%;
+  --radius: 1rem;
+}
+
+.dark {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 10%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 10%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 199 89% 58%;
+  --primary-foreground: 222 47% 7%;
+  --secondary: 217 33% 16%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217 33% 14%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 162 84% 48%;
+  --accent-foreground: 222 47% 7%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 69% 58%;
+  --success-foreground: 222 47% 7%;
+  --warning: 38 95% 55%;
+  --warning-foreground: 28 30% 14%;
+  --border: 217 33% 16%;
+  --input: 217 33% 16%;
+  --ring: 199 89% 58%;
+}
+
+* {
+  @apply border-border;
+}
+
+html {
+  color-scheme: light;
+}
+
+.dark html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-feature-settings: 'rlig' 1, 'calt' 1;
+  background-image:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 30%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 24%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.4), transparent 18%);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 26%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent 18%);
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.24);
+}
+
+.glass-panel {
+  @apply border border-white/60 bg-white/80 shadow-soft backdrop-blur-xl;
+}
+
+.dark .glass-panel {
+  @apply border-white/10 bg-slate-950/70;
+}
+
+.panel-gradient {
+  background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)) 48%, hsl(var(--muted)) 100%);
+}
+
+.code-surface {
+  @apply rounded-2xl border border-border bg-background/80 shadow-soft;
+}
+
+.json-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.json-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground) / 0.22);
+}
+
+.json-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
