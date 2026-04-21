@@ -1,0 +1,4 @@
+const fs = require('fs'); const ts = require('typescript'); const path = 'components/json-workbench.tsx'; const text = fs.readFileSync(path, 'utf8'); const lines = text.split(/?
+/); const cases = { full: text, prefix902: lines.slice(0, 902).join('
+'), prefix903: lines.slice(0, 903).join('
+') }; for (const [name, src] of Object.entries(cases)) {   const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);   const diag = sf.parseDiagnostics[0];   if (!diag) {     console.log(name + ': OK');   } else {     const pos = diag.start == null ? null : sf.getLineAndCharacterOfPosition(diag.start);     const loc = pos ? (pos.line + 1) + ':' + (pos.character + 1) : '?:?';     console.log(name + ': FAIL ' + loc + ' ' + ts.flattenDiagnosticMessageText(diag.messageText, ' '));   } }

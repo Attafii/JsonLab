@@ -2,15 +2,17 @@
 
 import type { ChangeEvent } from 'react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import { ArrowDownToLine, CheckCircle2, Copy, FileJson2, Loader2, Minimize2, Share2, Sparkles, Upload } from 'lucide-react';
+import { ArrowDownToLine, CheckCircle2, Copy, Loader2, Sparkles, Upload } from 'lucide-react';
 
 import { JsonDiffView } from '@/components/json-diff-view';
 import { JsonEditor } from '@/components/json-editor';
 import { JsonTableView } from '@/components/json-table-view';
 import { JsonTreeView } from '@/components/json-tree-view';
+import { WorkspaceCommandPalette, type WorkspaceCommand } from '@/components/workspace-command-palette';
 import { WorkspaceEmptyState } from '@/components/workspace-empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,6 +61,7 @@ const outputTabs: Array<{ value: OutputTab; label: string }> = [
 ];
 
 export function JsonLabWorkspace() {
+  const router = useRouter();
   const [primaryText, setPrimaryText] = useState('');
   const [compareText, setCompareText] = useState('');
   const [schemaText, setSchemaText] = useState('');
@@ -97,6 +100,219 @@ export function JsonLabWorkspace() {
       };
     }
   }, [primaryAnalysis.isValid, primaryAnalysis.value, schemaAnalysis.isValid, schemaAnalysis.value]);
+
+  /* return (
+    <div className="space-y-6">
+            <section className="space-y-4">
+              <JsonEditor
+                label="Primary JSON"
+                helperText="This document drives the tree, table, YAML, CSV, and type outputs."
+                value={primaryText}
+                onChange={(value) => setPrimaryText(value)}
+                error={primaryAnalysis.isValid ? null : primaryAnalysis.error?.message ?? 'Invalid JSON'}
+                height={620}
+              />
+
+              <Card className="border-border/70 bg-card/95 shadow-soft">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Primary summary</CardTitle>
+                  <CardDescription>Quick checks for the document you are editing right now.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatusPill label="JSON" tone={primaryAnalysis.isValid ? 'success' : 'destructive'} value={primaryAnalysis.isValid ? 'Valid' : 'Invalid'} />
+                  <StatusPill label="Schema" tone={schemaValidation.compileError || (schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid) ? 'destructive' : 'success'} value={schemaValidation.compileError ? 'Compile error' : schemaAnalysis.isValid && schemaAnalysis.value ? schemaValidation.valid ? 'Passes' : 'Fails' : 'Not loaded'} />
+                  <StatusPill label="Leaves" tone="secondary" value={primaryAnalysis.isValid ? countLeafValues(primaryAnalysis.value as JsonValue) : 'N/A'} />
+                  <StatusPill label="Compare" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? `${stats.compareLeaves} leaves` : 'Not ready'} />
+                </CardContent>
+              </Card>
+            </section>
+
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_360px]">
+              <section className="space-y-4">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold tracking-tight">Output Studio</h3>
+                    <p className="text-sm text-muted-foreground">Use this area to inspect structure, diffs, and exports.</p>
+                  </div>
+                  <Badge variant="secondary" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">{outputTab}</Badge>
+                </div>
+
+                <Tabs value={outputTab} onValueChange={(value) => setOutputTab(value as OutputTab)} className="space-y-4">
+                  <TabsList className="json-scrollbar flex w-full items-center justify-start gap-1 overflow-x-auto rounded-full border border-border/70 bg-card/90 p-1 shadow-sm">
+                    {outputTabs.map((tab) => (
+                      <TabsTrigger key={tab.value} value={tab.value} className="rounded-full px-4 text-xs uppercase tracking-[0.18em]">
+                        {tab.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={outputTab}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.22 }}
+                    >
+                      <TabsContent value={outputTab} forceMount className="mt-0">
+                        {renderOutputTab(outputTab, {
+                          primaryAnalysis,
+                          compareAnalysis,
+                          schemaValidation,
+                          schemaAnalysis,
+                          yamlText,
+                          csvArtifact,
+                          typeArtifacts,
+                          selectedPath,
+                          setSelectedPath
+                        })}
+                      </TabsContent>
+                    </motion.div>
+                  </AnimatePresence>
+                </Tabs>
+              </section>
+
+              <aside className="space-y-6">
+                <Card className="border-border/70 bg-card/95 shadow-soft">
+                  <CardHeader className="space-y-2 border-b border-border/60 pb-4">
+                    <CardTitle className="text-base">Inspector</CardTitle>
+                    <CardDescription>Comparison inputs, history, and workspace status live here.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-5">
+                    <Tabs defaultValue="inputs" className="space-y-4">
+                      <TabsList className="grid w-full grid-cols-3 rounded-full">
+                        <TabsTrigger value="inputs" className="rounded-full text-xs uppercase tracking-[0.18em]">Inputs</TabsTrigger>
+                        <TabsTrigger value="history" className="rounded-full text-xs uppercase tracking-[0.18em]">History</TabsTrigger>
+                        <TabsTrigger value="status" className="rounded-full text-xs uppercase tracking-[0.18em]">Status</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="inputs" className="space-y-4">
+                        <Tabs defaultValue="compare" className="space-y-4">
+                          <TabsList className="grid w-full grid-cols-2 rounded-full">
+                            <TabsTrigger value="compare" className="rounded-full text-xs uppercase tracking-[0.18em]">Compare</TabsTrigger>
+                            <TabsTrigger value="schema" className="rounded-full text-xs uppercase tracking-[0.18em]">Schema</TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="compare" className="space-y-3">
+                            <JsonEditor
+                              label="Comparison JSON"
+                              helperText="The diff panel compares this document with the primary JSON."
+                              value={compareText}
+                              onChange={(value) => setCompareText(value)}
+                              error={compareAnalysis.isValid ? null : compareAnalysis.error?.message ?? 'Invalid JSON'}
+                              height={240}
+                              compact
+                            />
+                            <StatusPill label="Compare nodes" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? stats.compareNodes : 'N/A'} />
+                          </TabsContent>
+
+                          <TabsContent value="schema" className="space-y-3">
+                            <JsonEditor
+                              label="JSON Schema"
+                              helperText="Schema validation also powers type generation when it is valid."
+                              value={schemaText}
+                              onChange={(value) => setSchemaText(value)}
+                              error={schemaAnalysis.isValid ? null : schemaAnalysis.error?.message ?? 'Invalid schema'}
+                              height={240}
+                              compact
+                            />
+                            {schemaAnalysis.isValid && schemaAnalysis.value ? (
+                              <div className="space-y-2 rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm">
+                                <StatusPill label="Schema" tone={schemaValidation.compileError || !schemaValidation.valid ? 'destructive' : 'success'} value={schemaValidation.compileError ? 'Compile error' : schemaValidation.valid ? 'Passes' : 'Fails'} />
+                                {!schemaValidation.compileError && schemaValidation.errors.length > 0 ? (
+                                  <div className="space-y-2 text-xs text-muted-foreground">
+                                    {schemaValidation.errors.slice(0, 3).map((error, index) => (
+                                      <div key={`${error.instancePath ?? 'schema'}-${index}`} className="rounded-xl border border-border bg-card px-3 py-2">
+                                        <p className="font-medium text-foreground">{error.instancePath || '/'}</p>
+                                        <p>{error.message}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </TabsContent>
+                        </Tabs>
+                      </TabsContent>
+
+                      <TabsContent value="history" className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold tracking-tight">Recent snippets</h3>
+                            <p className="text-xs text-muted-foreground">Stored locally in the browser for quick recall.</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() => {
+                              clearRecentSnippets();
+                              setRecentSnippets([]);
+                              setNotice({ tone: 'success', text: 'Recent snippets cleared.' });
+                            }}
+                          >
+                            Clear
+                          </Button>
+                        </div>
+
+                        {recentSnippets.length > 0 ? (
+                          <ScrollArea className="json-scrollbar max-h-[260px] pr-2">
+                            <div className="space-y-2">
+                              {recentSnippets.map((snippet) => (
+                                <button
+                                  key={snippet.id}
+                                  type="button"
+                                  className="group w-full rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-left transition hover:border-primary/40 hover:bg-muted/40"
+                                  onClick={() => {
+                                    startTransition(() => setPrimaryText(snippet.content));
+                                    setNotice({ tone: 'info', text: `Loaded ${snippet.title} from history.` });
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm font-medium text-foreground">{snippet.title}</span>
+                                    <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] uppercase tracking-[0.18em]">
+                                      {new Date(snippet.savedAt).toLocaleDateString()}
+                                    </Badge>
+                                  </div>
+                                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{snippet.content.slice(0, 120)}</p>
+                                </button>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        ) : (
+                          <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+                            Recent snippets will appear here after the primary JSON settles.
+                          </div>
+                        )}
+                      </TabsContent>
+
+                      <TabsContent value="status" className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-sm font-semibold tracking-tight">Workspace status</h3>
+                            <p className="text-xs text-muted-foreground">Current selection and validation details.</p>
+                          </div>
+                          <Badge variant={primaryAnalysis.isValid ? 'success' : 'destructive'} className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]">
+                            {primaryAnalysis.isValid ? 'Healthy' : 'Needs attention'}
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-3 text-sm">
+                          <StatusRow label="Selected path" value={selectedPath ?? 'None selected'} />
+                          <StatusRow label="Validation" value={validationMessage} muted={!primaryAnalysis.isValid || Boolean(schemaValidation.compileError) || Boolean(schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid)} />
+                          <StatusRow label="Line / column" value={primaryAnalysis.error?.line ? `${primaryAnalysis.error.line}:${primaryAnalysis.error.column ?? 1}` : 'No parse issue'} />
+                          <StatusRow label="Leaf count" value={`${stats.leaves.toLocaleString()}`} />
+                          <StatusRow label="Schema rules" value={schemaAnalysis.isValid && schemaAnalysis.value ? `${schemaValidation.errors.length} error(s)` : 'Not active'} />
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+              </aside>
+            </div>
+          </div>
+  */
 
   const typeArtifacts = useMemo<TypeArtifacts>(() => {
     if (schemaAnalysis.isValid && schemaAnalysis.value && schemaValidation.valid) {
@@ -315,36 +531,261 @@ export function JsonLabWorkspace() {
 
   const downloadEnabled = primaryAnalysis.isValid || Boolean(yamlText) || Boolean(typeArtifacts.typescript);
 
+  const workspaceCommands: WorkspaceCommand[] = [
+    {
+      id: 'validate-json',
+      label: 'Validate JSON',
+      description: 'Check the primary document and surface schema feedback.',
+      group: 'Actions',
+      shortcut: 'Enter',
+      run: handleValidate,
+      keywords: ['verify', 'schema', 'check']
+    },
+    {
+      id: 'format-json',
+      label: 'Format JSON',
+      description: 'Pretty-print the primary document.',
+      group: 'Actions',
+      shortcut: 'Shift F',
+      run: handleFormat,
+      disabled: !primaryAnalysis.isValid,
+      keywords: ['pretty', 'indent', 'normalize']
+    },
+    {
+      id: 'minify-json',
+      label: 'Minify JSON',
+      description: 'Compress the primary document for transport or storage.',
+      group: 'Actions',
+      shortcut: 'Shift M',
+      run: handleMinify,
+      disabled: !primaryAnalysis.isValid,
+      keywords: ['compact', 'compress', 'small']
+    },
+    {
+      id: 'share-link',
+      label: 'Copy share link',
+      description: 'Copy a URL with the current JSON embedded.',
+      group: 'Actions',
+      shortcut: 'Shift S',
+      run: handleShare,
+      disabled: !primaryAnalysis.isValid,
+      keywords: ['share', 'url', 'copy']
+    },
+    {
+      id: 'import-json',
+      label: 'Import JSON',
+      description: 'Load a JSON file from disk into the workspace.',
+      group: 'Actions',
+      shortcut: 'I',
+      run: handleImportClick,
+      keywords: ['upload', 'open', 'file']
+    },
+    {
+      id: 'reset-workspace',
+      label: 'Reset workspace',
+      description: 'Clear the editors and return to a blank canvas.',
+      group: 'Actions',
+      shortcut: 'R',
+      run: resetWorkspace,
+      disabled: isBlankWorkspace,
+      keywords: ['clear', 'blank', 'start over']
+    },
+    {
+      id: 'sample-api',
+      label: 'Load API sample',
+      description: 'Populate the workspace with an API payload diff example.',
+      group: 'Samples',
+      run: () => loadSample(WORKSPACE_SAMPLES[0]),
+      keywords: ['api', 'payload', 'response', 'diff']
+    },
+    {
+      id: 'sample-config',
+      label: 'Load nested config',
+      description: 'Explore a layered settings object and tree view.',
+      group: 'Samples',
+      run: () => loadSample(WORKSPACE_SAMPLES[1]),
+      keywords: ['nested', 'config', 'tree', 'settings']
+    },
+    {
+      id: 'sample-schema',
+      label: 'Load schema validation',
+      description: 'Load JSON plus schema to preview validation and types.',
+      group: 'Samples',
+      run: () => loadSample(WORKSPACE_SAMPLES[2]),
+      keywords: ['schema', 'validation', 'types', 'contract']
+    },
+    {
+      id: 'view-tree',
+      label: 'Switch to Tree view',
+      description: 'Browse nested objects and arrays structurally.',
+      group: 'Views',
+      shortcut: '1',
+      run: () => setOutputTab('tree'),
+      keywords: ['tree', 'structure', 'hierarchy']
+    },
+    {
+      id: 'view-table',
+      label: 'Switch to Table view',
+      description: 'Project object arrays into a tabular view.',
+      group: 'Views',
+      shortcut: '2',
+      run: () => setOutputTab('table'),
+      keywords: ['table', 'grid', 'rows']
+    },
+    {
+      id: 'view-diff',
+      label: 'Switch to Diff view',
+      description: 'Compare the primary JSON with the secondary document.',
+      group: 'Views',
+      shortcut: '3',
+      run: () => setOutputTab('diff'),
+      keywords: ['compare', 'changes', 'delta']
+    },
+    {
+      id: 'view-raw',
+      label: 'Switch to Raw view',
+      description: 'Inspect the original JSON source text.',
+      group: 'Views',
+      shortcut: '4',
+      run: () => setOutputTab('raw'),
+      keywords: ['raw', 'source', 'text']
+    },
+    {
+      id: 'view-minified',
+      label: 'Switch to Minified view',
+      description: 'Inspect the compact JSON output.',
+      group: 'Views',
+      shortcut: '5',
+      run: () => setOutputTab('minified'),
+      keywords: ['compact', 'minified', 'small']
+    },
+    {
+      id: 'view-yaml',
+      label: 'Switch to YAML view',
+      description: 'Preview the YAML projection of the primary document.',
+      group: 'Views',
+      shortcut: '6',
+      run: () => setOutputTab('yaml'),
+      keywords: ['yaml', 'conversion']
+    },
+    {
+      id: 'view-csv',
+      label: 'Switch to CSV view',
+      description: 'Preview a CSV projection when the JSON is tabular.',
+      group: 'Views',
+      shortcut: '7',
+      run: () => setOutputTab('csv'),
+      keywords: ['csv', 'table', 'spreadsheet']
+    },
+    {
+      id: 'view-types',
+      label: 'Switch to Types view',
+      description: 'Preview generated TypeScript and Dart models.',
+      group: 'Views',
+      shortcut: '8',
+      run: () => setOutputTab('types'),
+      keywords: ['types', 'codegen', 'models']
+    },
+    {
+      id: 'export-json',
+      label: 'Export formatted JSON',
+      description: 'Download the normalized primary JSON as a file.',
+      group: 'Export',
+      run: () => handleDownload('jsonlab-formatted.json', primaryAnalysis.formatted),
+      disabled: !primaryAnalysis.isValid || !primaryAnalysis.formatted,
+      keywords: ['download', 'pretty', 'json']
+    },
+    {
+      id: 'export-minified',
+      label: 'Export minified JSON',
+      description: 'Download a compact JSON file.',
+      group: 'Export',
+      run: () => handleDownload('jsonlab-minified.json', primaryAnalysis.minified),
+      disabled: !primaryAnalysis.isValid || !primaryAnalysis.minified,
+      keywords: ['download', 'compact', 'json']
+    },
+    {
+      id: 'export-yaml',
+      label: 'Export YAML',
+      description: 'Download the YAML conversion of the active document.',
+      group: 'Export',
+      run: () => handleDownload('jsonlab.yaml', yamlText),
+      disabled: !yamlText,
+      keywords: ['download', 'yaml']
+    },
+    {
+      id: 'export-csv',
+      label: 'Export CSV',
+      description: 'Download a CSV view when the JSON is tabular.',
+      group: 'Export',
+      run: () => handleDownload('jsonlab.csv', csvArtifact?.csv ?? ''),
+      disabled: !csvArtifact?.csv,
+      keywords: ['download', 'csv']
+    },
+    {
+      id: 'export-typescript',
+      label: 'Export TypeScript',
+      description: 'Download generated TypeScript types.',
+      group: 'Export',
+      run: () => handleDownload('jsonlab.ts', typeArtifacts.typescript),
+      disabled: !typeArtifacts.typescript,
+      keywords: ['download', 'typescript', 'types']
+    },
+    {
+      id: 'export-dart',
+      label: 'Export Dart',
+      description: 'Download generated Dart models.',
+      group: 'Export',
+      run: () => handleDownload('jsonlab.dart', typeArtifacts.dart),
+      disabled: !typeArtifacts.dart,
+      keywords: ['download', 'dart', 'models']
+    },
+    {
+      id: 'navigate-ai',
+      label: 'Open AI Assistant',
+      description: 'Jump to the AI workspace.',
+      group: 'Navigation',
+      run: () => router.push('/ai'),
+      keywords: ['ai', 'assistant', 'chat']
+    },
+    {
+      id: 'navigate-mock-data',
+      label: 'Open Mock Data',
+      description: 'Jump to the mock data generator.',
+      group: 'Navigation',
+      run: () => router.push('/mock-data'),
+      keywords: ['mock', 'generator', 'faker']
+    }
+  ];
+
   return (
     <div className="space-y-6 pb-6">
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="glass-panel relative overflow-hidden rounded-[2rem] p-6 shadow-soft"
+        className="glass-panel relative overflow-hidden rounded-[1.85rem] p-5 shadow-soft sm:p-6"
       >
-        <div className="absolute inset-0 bg-grid-fade bg-[length:22px_22px] opacity-[0.08]" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl space-y-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.26em] text-muted-foreground">
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-muted-foreground">
               <Sparkles className="h-4 w-4 text-primary" />
               JsonLab workspace
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                {isBlankWorkspace ? 'Start with a guided sample or paste your own JSON.' : 'Explore, validate, and reshape JSON in one fluid workspace.'}
+                {isBlankWorkspace ? 'Start with a sample or paste JSON.' : 'Inspect, validate, and reshape JSON in one place.'}
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                 {isBlankWorkspace
-                  ? 'Pick a one-click example to load an API payload, nested config, or schema pair. The editor, tree, diff, and type outputs all update together.'
-                  : 'JsonLab keeps the input editor, tree explorer, schema validation, type generation, and diff view visible together so the work never feels fragmented.'}
+                  ? 'Use the command palette to load samples, import files, or jump to the right view. Everything updates together.'
+                  : 'The editor, tree, diff, schema, and export tools stay in one workspace so the flow stays focused.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isBlankWorkspace ? (
                 <>
                   <Badge variant="secondary" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">Guided start</Badge>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">3 sample paths</Badge>
                   <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">Blank canvas</Badge>
                 </>
               ) : (
@@ -359,9 +800,10 @@ export function JsonLabWorkspace() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 lg:max-w-[30rem] lg:justify-end">
             {isBlankWorkspace ? (
               <>
+                <WorkspaceCommandPalette commands={workspaceCommands} triggerVariant="secondary" />
                 <Button type="button" onClick={() => loadSample(WORKSPACE_SAMPLES[0])} className="rounded-full px-5 shadow-glow">
                   <Sparkles className="h-4 w-4" />
                   Load API sample
@@ -373,28 +815,14 @@ export function JsonLabWorkspace() {
               </>
             ) : (
               <>
+                <WorkspaceCommandPalette commands={workspaceCommands} triggerVariant="secondary" />
                 <Button type="button" variant="secondary" onClick={handleValidate} className="rounded-full px-5 shadow-sm">
                   <CheckCircle2 className="h-4 w-4" />
                   Validate
                 </Button>
-                <Button type="button" variant="secondary" onClick={handleFormat} className="rounded-full px-5 shadow-sm">
-                  <FileJson2 className="h-4 w-4" />
-                  Format
-                </Button>
-                <Button type="button" variant="secondary" onClick={handleMinify} className="rounded-full px-5 shadow-sm">
-                  <Minimize2 className="h-4 w-4" />
-                  Minify
-                </Button>
-                <Button type="button" variant="secondary" onClick={handleShare} className="rounded-full px-5 shadow-sm">
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </Button>
                 <Button type="button" variant="secondary" onClick={handleImportClick} className="rounded-full px-5 shadow-sm">
                   <Upload className="h-4 w-4" />
                   Import
-                </Button>
-                <Button type="button" variant="secondary" onClick={resetWorkspace} className="rounded-full px-5 shadow-sm">
-                  Samples
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -431,18 +859,16 @@ export function JsonLabWorkspace() {
           </div>
         </div>
 
-        <div className="relative mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="relative mt-6 grid gap-3 sm:grid-cols-3">
           {isBlankWorkspace ? (
             <>
-              <Metric label="Samples" value="3" />
-              <Metric label="Click path" value="API, config, schema" />
-              <Metric label="State" value="Ready to explore" />
-              <Metric label="Import" value="Also supported" />
+              <Metric label="Samples" value="3 curated paths" />
+              <Metric label="Shortcut" value="Ctrl / Cmd + K" />
+              <Metric label="Import" value="Ready" />
             </>
           ) : (
             <>
               <Metric label="Bytes" value={`${stats.bytes.toLocaleString()}`} />
-              <Metric label="Lines" value={`${stats.lines.toLocaleString()}`} />
               <Metric label="Nodes" value={`${stats.nodes.toLocaleString()}`} />
               <Metric label="Depth" value={`${stats.depth.toLocaleString()}`} />
             </>
@@ -472,29 +898,167 @@ export function JsonLabWorkspace() {
       {isBlankWorkspace ? (
         <WorkspaceEmptyState samples={WORKSPACE_SAMPLES} onLoadSample={loadSample} onImport={handleImportClick} />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_360px]">
-          <div className="space-y-6">
-            <JsonEditor
-              label="Primary JSON"
-              helperText="This document drives the tree, table, YAML, CSV, and type outputs."
-              value={primaryText}
-              onChange={(value) => setPrimaryText(value)}
-              error={primaryAnalysis.isValid ? null : primaryAnalysis.error?.message ?? 'Invalid JSON'}
-              height={640}
-            />
+        <div className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_380px]">
+            <div className="space-y-6">
+              <JsonEditor
+                label="Primary JSON"
+                helperText="This document drives the tree, table, YAML, CSV, and type outputs."
+                value={primaryText}
+                onChange={(value) => setPrimaryText(value)}
+                error={primaryAnalysis.isValid ? null : primaryAnalysis.error?.message ?? 'Invalid JSON'}
+                height={640}
+              />
 
-            <Card className="border-border/70 bg-card/95 shadow-soft">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Validation Summary</CardTitle>
-                <CardDescription>Schema validation is applied when a valid schema is loaded on the right.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                <StatusPill label="JSON" tone={primaryAnalysis.isValid ? 'success' : 'destructive'} value={primaryAnalysis.isValid ? 'Valid' : 'Invalid'} />
-                <StatusPill label="Schema" tone={schemaValidation.compileError || (schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid) ? 'destructive' : 'success'} value={schemaValidation.compileError ? 'Compile error' : schemaAnalysis.isValid && schemaAnalysis.value ? schemaValidation.valid ? 'Passes' : 'Fails' : 'Not loaded'} />
-                <StatusPill label="Leaves" tone="secondary" value={primaryAnalysis.isValid ? countLeafValues(primaryAnalysis.value as JsonValue) : 'N/A'} />
-                <StatusPill label="Compare" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? `${stats.compareLeaves} leaves` : 'Not ready'} />
-              </CardContent>
-            </Card>
+              <Card className="border-border/70 bg-card/95 shadow-soft">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Validation Summary</CardTitle>
+                  <CardDescription>Schema validation is applied when a valid schema is loaded in the inspector.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-2">
+                  <StatusPill label="JSON" tone={primaryAnalysis.isValid ? 'success' : 'destructive'} value={primaryAnalysis.isValid ? 'Valid' : 'Invalid'} />
+                  <StatusPill label="Schema" tone={schemaValidation.compileError || (schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid) ? 'destructive' : 'success'} value={schemaValidation.compileError ? 'Compile error' : schemaAnalysis.isValid && schemaAnalysis.value ? schemaValidation.valid ? 'Passes' : 'Fails' : 'Not loaded'} />
+                  <StatusPill label="Leaves" tone="secondary" value={primaryAnalysis.isValid ? countLeafValues(primaryAnalysis.value as JsonValue) : 'N/A'} />
+                  <StatusPill label="Compare" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? `${stats.compareLeaves} leaves` : 'Not ready'} />
+                </CardContent>
+              </Card>
+            </div>
+
+            <aside className="space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold tracking-tight">Inspector</h3>
+                <p className="text-sm text-muted-foreground">Separate the secondary editor, history, and state into focused cards.</p>
+              </div>
+
+              <Card className="border-border/70 bg-card/95 shadow-soft">
+                <CardHeader className="space-y-2 border-b border-border/60 pb-4">
+                  <CardTitle className="text-base">Comparison and schema</CardTitle>
+                  <CardDescription>Switch between the secondary JSON and schema without leaving the inspector.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-5">
+                  <Tabs defaultValue="compare" className="space-y-4">
+                    <TabsList className="grid w-full grid-cols-2 rounded-full">
+                      <TabsTrigger value="compare" className="rounded-full text-xs uppercase tracking-[0.18em]">Compare</TabsTrigger>
+                      <TabsTrigger value="schema" className="rounded-full text-xs uppercase tracking-[0.18em]">Schema</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="compare" className="space-y-3">
+                      <JsonEditor
+                        label="Comparison JSON"
+                        helperText="This drives the diff view and lets you compare two documents quickly."
+                        value={compareText}
+                        onChange={(value) => setCompareText(value)}
+                        error={compareAnalysis.isValid ? null : compareAnalysis.error?.message ?? 'Invalid JSON'}
+                        height={240}
+                        compact
+                      />
+                      <StatusPill label="Compare nodes" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? stats.compareNodes : 'N/A'} />
+                    </TabsContent>
+
+                    <TabsContent value="schema" className="space-y-3">
+                      <JsonEditor
+                        label="JSON Schema"
+                        helperText="Valid schema also powers type generation."
+                        value={schemaText}
+                        onChange={(value) => setSchemaText(value)}
+                        error={schemaAnalysis.isValid ? null : schemaAnalysis.error?.message ?? 'Invalid schema'}
+                        height={240}
+                        compact
+                      />
+                      {schemaAnalysis.isValid && schemaAnalysis.value ? (
+                        <div className="space-y-2 rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm">
+                          <StatusPill label="Schema" tone={schemaValidation.compileError || !schemaValidation.valid ? 'destructive' : 'success'} value={schemaValidation.compileError ? 'Compile error' : schemaValidation.valid ? 'Passes' : 'Fails'} />
+                          {!schemaValidation.compileError && schemaValidation.errors.length > 0 ? (
+                            <div className="space-y-2 text-xs text-muted-foreground">
+                              {schemaValidation.errors.slice(0, 3).map((error, index) => (
+                                <div key={`${error.instancePath ?? 'schema'}-${index}`} className="rounded-xl border border-border bg-card px-3 py-2">
+                                  <p className="font-medium text-foreground">{error.instancePath || '/'}</p>
+                                  <p>{error.message}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70 bg-card/95 shadow-soft">
+                <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
+                  <div>
+                    <CardTitle className="text-base">Recent snippets</CardTitle>
+                    <CardDescription>Stored locally in the browser for quick recall.</CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => {
+                      clearRecentSnippets();
+                      setRecentSnippets([]);
+                      setNotice({ tone: 'success', text: 'Recent snippets cleared.' });
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {recentSnippets.length > 0 ? (
+                    <ScrollArea className="json-scrollbar max-h-[240px] pr-2">
+                      <div className="space-y-2">
+                        {recentSnippets.map((snippet) => (
+                          <button
+                            key={snippet.id}
+                            type="button"
+                            className="group w-full rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-left transition hover:border-primary/40 hover:bg-muted/40"
+                            onClick={() => {
+                              startTransition(() => setPrimaryText(snippet.content));
+                              setNotice({ tone: 'info', text: `Loaded ${snippet.title} from history.` });
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium text-foreground">{snippet.title}</span>
+                              <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] uppercase tracking-[0.18em]">
+                                {new Date(snippet.savedAt).toLocaleDateString()}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{snippet.content.slice(0, 120)}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+                      Recent snippets will appear here after the primary JSON settles.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70 bg-card/95 shadow-soft">
+                <CardHeader className="space-y-2 border-b border-border/60 pb-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base">Workspace status</CardTitle>
+                      <CardDescription>Current selection and validation details.</CardDescription>
+                    </div>
+                    <Badge variant={primaryAnalysis.isValid ? 'success' : 'destructive'} className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]">
+                      {primaryAnalysis.isValid ? 'Healthy' : 'Needs attention'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm pt-5">
+                  <StatusRow label="Selected path" value={selectedPath ?? 'None selected'} />
+                  <StatusRow label="Validation" value={validationMessage} muted={!primaryAnalysis.isValid || Boolean(schemaValidation.compileError) || Boolean(schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid)} />
+                  <StatusRow label="Line / column" value={primaryAnalysis.error?.line ? `${primaryAnalysis.error.line}:${primaryAnalysis.error.column ?? 1}` : 'No parse issue'} />
+                  <StatusRow label="Leaf count" value={`${stats.leaves.toLocaleString()}`} />
+                  <StatusRow label="Schema rules" value={schemaAnalysis.isValid && schemaAnalysis.value ? `${schemaValidation.errors.length} error(s)` : 'Not active'} />
+                </CardContent>
+              </Card>
+            </aside>
           </div>
 
           <section className="space-y-4">
@@ -540,123 +1104,6 @@ export function JsonLabWorkspace() {
               </AnimatePresence>
             </Tabs>
           </section>
-
-          <aside className="space-y-6">
-            <Card className="border-border/70 bg-card/95 shadow-soft">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Secondary Inputs</CardTitle>
-                <CardDescription>Comparison JSON and schema validation stay one click away.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="compare" className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-2 rounded-full">
-                    <TabsTrigger value="compare" className="rounded-full text-xs uppercase tracking-[0.18em]">Compare</TabsTrigger>
-                    <TabsTrigger value="schema" className="rounded-full text-xs uppercase tracking-[0.18em]">Schema</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="compare" className="space-y-3">
-                    <JsonEditor
-                      label="Comparison JSON"
-                      helperText="The diff panel compares this document with the primary JSON."
-                      value={compareText}
-                      onChange={(value) => setCompareText(value)}
-                      error={compareAnalysis.isValid ? null : compareAnalysis.error?.message ?? 'Invalid JSON'}
-                      height={280}
-                      compact
-                    />
-                    <StatusPill label="Compare nodes" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? stats.compareNodes : 'N/A'} />
-                  </TabsContent>
-
-                  <TabsContent value="schema" className="space-y-3">
-                    <JsonEditor
-                      label="JSON Schema"
-                      helperText="Schema validation also powers type generation when it is valid."
-                      value={schemaText}
-                      onChange={(value) => setSchemaText(value)}
-                      error={schemaAnalysis.isValid ? null : schemaAnalysis.error?.message ?? 'Invalid schema'}
-                      height={280}
-                      compact
-                    />
-                    {schemaAnalysis.isValid && schemaAnalysis.value ? (
-                      <div className="space-y-2 rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm">
-                        <StatusPill label="Schema" tone={schemaValidation.compileError || !schemaValidation.valid ? 'destructive' : 'success'} value={schemaValidation.compileError ? 'Compile error' : schemaValidation.valid ? 'Passes' : 'Fails'} />
-                        {!schemaValidation.compileError && schemaValidation.errors.length > 0 ? (
-                          <div className="space-y-2 text-xs text-muted-foreground">
-                            {schemaValidation.errors.slice(0, 3).map((error, index) => (
-                              <div key={`${error.instancePath ?? 'schema'}-${index}`} className="rounded-xl border border-border bg-card px-3 py-2">
-                                <p className="font-medium text-foreground">{error.instancePath || '/'}</p>
-                                <p>{error.message}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/70 bg-card/95 shadow-soft">
-              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
-                <div>
-                  <CardTitle className="text-base">Recent Snippets</CardTitle>
-                  <CardDescription>Stored locally in the browser for quick recall.</CardDescription>
-                </div>
-                <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => { clearRecentSnippets(); setRecentSnippets([]); setNotice({ tone: 'success', text: 'Recent snippets cleared.' }); }}>
-                  Clear
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {recentSnippets.length > 0 ? (
-                  <ScrollArea className="json-scrollbar max-h-[280px] pr-2">
-                    <div className="space-y-2">
-                      {recentSnippets.map((snippet) => (
-                        <button
-                          key={snippet.id}
-                          type="button"
-                          className="group w-full rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-left transition hover:border-primary/40 hover:bg-muted/40"
-                          onClick={() => {
-                            startTransition(() => setPrimaryText(snippet.content));
-                            setNotice({ tone: 'info', text: `Loaded ${snippet.title} from history.` });
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-medium text-foreground">{snippet.title}</span>
-                            <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] uppercase tracking-[0.18em]">{new Date(snippet.savedAt).toLocaleDateString()}</Badge>
-                          </div>
-                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{snippet.content.slice(0, 120)}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                    Recent snippets will appear here after the primary JSON settles.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/70 bg-card/95 shadow-soft">
-              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
-                <div>
-                  <CardTitle className="text-base">Status</CardTitle>
-                  <CardDescription>Current workspace health and selection details.</CardDescription>
-                </div>
-                <Badge variant={primaryAnalysis.isValid ? 'success' : 'destructive'} className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]">
-                  {primaryAnalysis.isValid ? 'Healthy' : 'Needs attention'}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <StatusRow label="Selected path" value={selectedPath ?? 'None selected'} />
-                <StatusRow label="Validation" value={validationMessage} muted={!primaryAnalysis.isValid || Boolean(schemaValidation.compileError) || Boolean(schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid)} />
-                <StatusRow label="Line / column" value={primaryAnalysis.error?.line ? `${primaryAnalysis.error.line}:${primaryAnalysis.error.column ?? 1}` : 'No parse issue'} />
-                <StatusRow label="Leaf count" value={`${stats.leaves.toLocaleString()}`} />
-                <StatusRow label="Schema rules" value={schemaAnalysis.isValid && schemaAnalysis.value ? `${schemaValidation.errors.length} error(s)` : 'Not active'} />
-              </CardContent>
-            </Card>
-          </aside>
         </div>
       )}
 
