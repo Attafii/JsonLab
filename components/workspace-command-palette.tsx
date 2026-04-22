@@ -28,6 +28,7 @@ interface WorkspaceCommandPaletteProps {
   triggerHint?: string;
   triggerVariant?: ButtonProps['variant'];
   className?: string;
+  openSignal?: number;
 }
 
 export function WorkspaceCommandPalette({
@@ -35,7 +36,8 @@ export function WorkspaceCommandPalette({
   triggerLabel = 'Command palette',
   triggerHint = 'Ctrl K',
   triggerVariant = 'secondary',
-  className
+  className,
+  openSignal
 }: WorkspaceCommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -60,6 +62,14 @@ export function WorkspaceCommandPalette({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (typeof openSignal !== 'number') {
+      return;
+    }
+
+    setOpen(true);
+  }, [openSignal]);
 
   useEffect(() => {
     if (!open) {

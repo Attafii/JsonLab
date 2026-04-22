@@ -3,6 +3,24 @@ export interface RecentSnippet {
   title: string;
   content: string;
   savedAt: number;
+  kind?: 'edit' | 'import' | 'sample' | 'restore';
+  summary?: string;
+  snapshot?: WorkspaceSnapshot;
+}
+
+export interface WorkspaceSnapshot {
+  primaryText: string;
+  compareText: string;
+  schemaText: string;
+  outputTab: string;
+  selectedPath: string | null;
+}
+
+interface AddRecentSnippetOptions {
+  title?: string;
+  summary?: string;
+  kind?: RecentSnippet['kind'];
+  snapshot?: WorkspaceSnapshot;
 }
 
 const RECENT_SNIPPETS_KEY = 'jsonlab.recent-snippets.v1';
@@ -27,6 +45,22 @@ function buildTitle(content: string) {
   }
 
   return content.length > 32 ? `${content.slice(0, 32)}…` : content;
+}
+
+function buildSummary(kind: RecentSnippet['kind'], title: string) {
+  if (kind === 'import') {
+    return `Imported ${title}.`;
+  }
+
+  if (kind === 'sample') {
+    return `Loaded ${title} sample.`;
+  }
+
+  if (kind === 'restore') {
+    return `Restored ${title} from history.`;
+  }
+
+  return `Edited ${title}.`;
 }
 
 export function loadRecentSnippets(): RecentSnippet[] {
@@ -55,16 +89,20 @@ export function saveRecentSnippets(entries: RecentSnippet[]) {
   window.localStorage.setItem(RECENT_SNIPPETS_KEY, JSON.stringify(entries.slice(0, MAX_RECENT_SNIPPETS)));
 }
 
-export function addRecentSnippet(content: string, existing: RecentSnippet[] = []): RecentSnippet[] {
-  const title = buildTitle(content);
+export function addRecentSnippet(content: string, existing: RecentSnippet[] = [], options: AddRecentSnippetOptions = {}): RecentSnippet[] {
+  const title = options.title ?? buildTitle(content);
+  const kind = options.kind ?? 'edit';
   const snippet: RecentSnippet = {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
     content,
-    savedAt: Date.now()
+    savedAt: Date.now(),
+    kind,
+    summary: options.summary ?? buildSummary(kind, title),
+    snapshot: options.snapshot
   };
 
-  const combined = [snippet, ...existing.filter((entry) => entry.content !== content)];
+  const combined = [snippet, ...existing.filter((entry) => entry.content !== content || entry.kind !== kind)];
   return combined.slice(0, MAX_RECENT_SNIPPETS);
 }
 

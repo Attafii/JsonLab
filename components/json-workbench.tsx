@@ -13,6 +13,9 @@ import { JsonEditor } from '@/components/json-editor';
 import { JsonTableView } from '@/components/json-table-view';
 import { JsonTreeView } from '@/components/json-tree-view';
 import { WorkspaceCommandPalette, type WorkspaceCommand } from '@/components/workspace-command-palette';
+import { WorkspaceHistoryTimeline } from '@/components/workspace-history-timeline';
+import { WorkspaceOnboarding } from '@/components/workspace-onboarding';
+import { WorkspaceSearchPanel } from '@/components/workspace-search-panel';
 import { WorkspaceEmptyState } from '@/components/workspace-empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +29,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addRecentSnippet, loadRecentSnippets, saveRecentSnippets, type RecentSnippet, clearRecentSnippets } from '@/lib/storage';
+import { addRecentSnippet, loadRecentSnippets, saveRecentSnippets, type RecentSnippet, type WorkspaceSnapshot, clearRecentSnippets } from '@/lib/storage';
 import { decodeJsonFromUrl, encodeJsonForUrl } from '@/lib/share';
 import {
   analyzeJson,
@@ -40,6 +43,7 @@ import {
 } from '@/lib/json-utils';
 import { WORKSPACE_SAMPLES, type WorkspaceSample } from '@/lib/samples';
 import { generateTypeArtifactsFromJson, generateTypeArtifactsFromSchema, type TypeArtifacts } from '@/lib/type-generation';
+import { type WorkspaceSearchMode } from '@/lib/workspace-search';
 import { cn } from '@/lib/utils';
 
 type OutputTab = 'tree' | 'table' | 'diff' | 'raw' | 'minified' | 'yaml' | 'csv' | 'types';
@@ -60,6 +64,8 @@ const outputTabs: Array<{ value: OutputTab; label: string }> = [
   { value: 'types', label: 'Types' }
 ];
 
+const ONBOARDING_STORAGE_KEY = 'jsonlab.onboarding.completed.v1';
+
 export function JsonLabWorkspace() {
   const router = useRouter();
   const [primaryText, setPrimaryText] = useState('');
@@ -69,8 +75,16 @@ export function JsonLabWorkspace() {
   const [recentSnippets, setRecentSnippets] = useState<RecentSnippet[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [notice, setNotice] = useState<NoticeState | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [searchMode, setSearchMode] = useState<WorkspaceSearchMode>('all');
+  const [searchFocusToken, setSearchFocusToken] = useState(0);
+  const [paletteOpenToken, setPaletteOpenToken] = useState(0);
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const searchPanelRef = useRef<HTMLDivElement | null>(null);
+  const historyPanelRef = useRef<HTMLDivElement | null>(null);
+  const outputSectionRef = useRef<HTMLDivElement | null>(null);
+  const suppressNextEditHistoryRef = useRef(false);
   const lastSavedRef = useRef('');
 
   const deferredPrimaryText = useDeferredValue(primaryText);
@@ -170,41 +184,25 @@ export function JsonLabWorkspace() {
                     </motion.div>
                   </AnimatePresence>
                 </Tabs>
+
+                  <div className="grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2">
+                    <StatusRow label="Selected path" value={selectedPath ?? 'None selected'} />
+                    <StatusRow label="Validation" value={validationMessage} muted={!primaryAnalysis.isValid || Boolean(schemaValidation.compileError) || Boolean(schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid)} />
+                    <StatusRow label="Line / column" value={primaryAnalysis.error?.line ? `${primaryAnalysis.error.line}:${primaryAnalysis.error.column ?? 1}` : 'No parse issue'} />
+                    <StatusRow label="Schema rules" value={schemaAnalysis.isValid && schemaAnalysis.value ? `${schemaValidation.errors.length} error(s)` : 'Not active'} />
+                  </div>
               </section>
 
               <aside className="space-y-6">
-                <Card className="border-border/70 bg-card/95 shadow-soft">
-                  <CardHeader className="space-y-2 border-b border-border/60 pb-4">
-                    <CardTitle className="text-base">Inspector</CardTitle>
-                    <CardDescription>Comparison inputs, history, and workspace status live here.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-5">
-                    <Tabs defaultValue="inputs" className="space-y-4">
-                      <TabsList className="grid w-full grid-cols-3 rounded-full">
-                        <TabsTrigger value="inputs" className="rounded-full text-xs uppercase tracking-[0.18em]">Inputs</TabsTrigger>
-                        <TabsTrigger value="history" className="rounded-full text-xs uppercase tracking-[0.18em]">History</TabsTrigger>
-                        <TabsTrigger value="status" className="rounded-full text-xs uppercase tracking-[0.18em]">Status</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="inputs" className="space-y-4">
-                        <Tabs defaultValue="compare" className="space-y-4">
-                          <TabsList className="grid w-full grid-cols-2 rounded-full">
-                            <TabsTrigger value="compare" className="rounded-full text-xs uppercase tracking-[0.18em]">Compare</TabsTrigger>
-                            <TabsTrigger value="schema" className="rounded-full text-xs uppercase tracking-[0.18em]">Schema</TabsTrigger>
-                          </TabsList>
-
-                          <TabsContent value="compare" className="space-y-3">
-                            <JsonEditor
-                              label="Comparison JSON"
-                              helperText="The diff panel compares this document with the primary JSON."
-                              value={compareText}
-                              onChange={(value) => setCompareText(value)}
-                              error={compareAnalysis.isValid ? null : compareAnalysis.error?.message ?? 'Invalid JSON'}
-                              height={240}
-                              compact
-                            />
-                            <StatusPill label="Compare nodes" tone={compareAnalysis.isValid ? 'success' : 'secondary'} value={compareAnalysis.isValid ? stats.compareNodes : 'N/A'} />
-                          </TabsContent>
+              <div ref={historyPanelRef} className="scroll-mt-24">
+                <WorkspaceHistoryTimeline
+                  entries={recentSnippets}
+                  onRestore={handleRestoreHistoryEntry}
+                  onCompare={handleCompareHistoryEntry}
+                  onClear={handleClearHistory}
+                />
+              </div>
+            </aside>
 
                           <TabsContent value="schema" className="space-y-3">
                             <JsonEditor
@@ -351,6 +349,10 @@ export function JsonLabWorkspace() {
       return;
     }
 
+    if (!window.localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+      setShowOnboarding(true);
+    }
+
     const encodedJson = new URLSearchParams(window.location.search).get('data');
     if (!encodedJson) {
       return;
@@ -366,6 +368,7 @@ export function JsonLabWorkspace() {
   }, []);
 
   const loadSample = (sample: WorkspaceSample) => {
+    suppressNextEditHistoryRef.current = true;
     startTransition(() => {
       setPrimaryText(sample.primaryText);
       setCompareText(sample.compareText ?? '');
@@ -373,6 +376,20 @@ export function JsonLabWorkspace() {
       setOutputTab(sample.outputTab);
       setSelectedPath(null);
     });
+
+    recordHistoryEntry(
+      'sample',
+      sample.primaryText,
+      {
+        primaryText: sample.primaryText,
+        compareText: sample.compareText ?? '',
+        schemaText: sample.schemaText ?? '',
+        outputTab: sample.outputTab,
+        selectedPath: null
+      },
+      sample.title,
+      `Loaded ${sample.title} sample.`
+    );
 
     setNotice({ tone: 'success', text: `Loaded ${sample.title}.` });
   };
@@ -389,8 +406,149 @@ export function JsonLabWorkspace() {
     setNotice({ tone: 'info', text: 'Workspace cleared. Choose another sample to continue.' });
   };
 
+  const createSnapshot = (overrides: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot => ({
+    primaryText: overrides.primaryText ?? primaryText,
+    compareText: overrides.compareText ?? compareText,
+    schemaText: overrides.schemaText ?? schemaText,
+    outputTab: overrides.outputTab ?? outputTab,
+    selectedPath: overrides.selectedPath ?? selectedPath
+  });
+
+  const recordHistoryEntry = (
+    kind: NonNullable<RecentSnippet['kind']>,
+    content: string,
+    snapshot: WorkspaceSnapshot,
+    title?: string,
+    summary?: string
+  ) => {
+    setRecentSnippets((current) => {
+      const next = addRecentSnippet(content, current, {
+        kind,
+        title,
+        summary,
+        snapshot
+      });
+
+      saveRecentSnippets(next);
+      return next;
+    });
+
+    lastSavedRef.current = content;
+  };
+
+  const handleClearHistory = () => {
+    clearRecentSnippets();
+    setRecentSnippets([]);
+    setNotice({ tone: 'success', text: 'History timeline cleared.' });
+  };
+
+  const handleOpenPalette = () => {
+    setPaletteOpenToken((current) => current + 1);
+  };
+
+  const handleOpenOnboarding = () => {
+    setShowOnboarding(true);
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleDismissOnboarding = () => {
+    setShowOnboarding(false);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true');
+    }
+  };
+
+  const handleOpenSearch = (mode: WorkspaceSearchMode = 'all') => {
+    if (isBlankWorkspace) {
+      setNotice({ tone: 'info', text: 'Load a sample or import JSON to unlock search and history.' });
+      return;
+    }
+
+    setSearchMode(mode);
+    setSearchFocusToken((current) => current + 1);
+    searchPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setNotice({ tone: 'info', text: mode === 'paths' ? 'Search is ready in path mode.' : 'Search is ready.' });
+  };
+
+  const handleOpenHistory = () => {
+    if (isBlankWorkspace) {
+      setNotice({ tone: 'info', text: 'History appears after the first sample, import, or edit.' });
+      return;
+    }
+
+    historyPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setNotice({ tone: 'info', text: 'History timeline opened.' });
+  };
+
+  const handleJumpToPath = (path: string) => {
+    if (isBlankWorkspace) {
+      setNotice({ tone: 'info', text: 'Load a sample or import JSON before jumping to a path.' });
+      return;
+    }
+
+    setSelectedPath(path);
+    setOutputTab('tree');
+    outputSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setNotice({ tone: 'info', text: `Jumped to ${path}.` });
+  };
+
+  const handleRestoreHistoryEntry = (entry: RecentSnippet) => {
+    const snapshot = entry.snapshot ?? {
+      primaryText: entry.content,
+      compareText: '',
+      schemaText: '',
+      outputTab: 'tree',
+      selectedPath: null
+    };
+
+    suppressNextEditHistoryRef.current = true;
+    recordHistoryEntry(
+      'restore',
+      snapshot.primaryText,
+      snapshot,
+      entry.title,
+      `Restored ${entry.title} from history.`
+    );
+
+    startTransition(() => {
+      setPrimaryText(snapshot.primaryText);
+      setCompareText(snapshot.compareText);
+      setSchemaText(snapshot.schemaText);
+      setOutputTab(snapshot.outputTab as OutputTab);
+      setSelectedPath(snapshot.selectedPath);
+    });
+
+    setNotice({ tone: 'success', text: `Restored ${entry.title}.` });
+  };
+
+  const handleCompareHistoryEntry = (entry: RecentSnippet) => {
+    if (isBlankWorkspace) {
+      setNotice({ tone: 'info', text: 'Load a sample or import JSON before comparing versions.' });
+      return;
+    }
+
+    const compareValue = entry.snapshot?.primaryText ?? entry.content;
+
+    startTransition(() => {
+      setCompareText(compareValue);
+      setOutputTab('diff');
+    });
+
+    outputSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setNotice({ tone: 'info', text: `Comparing against ${entry.title}.` });
+  };
+
   useEffect(() => {
     if (!primaryAnalysis.isValid) {
+      return;
+    }
+
+    if (suppressNextEditHistoryRef.current) {
+      suppressNextEditHistoryRef.current = false;
       return;
     }
 
@@ -400,12 +558,11 @@ export function JsonLabWorkspace() {
     }
 
     const timeout = window.setTimeout(() => {
-      setRecentSnippets((current) => {
-        const next = addRecentSnippet(normalized, current);
-        saveRecentSnippets(next);
-        lastSavedRef.current = normalized;
-        return next;
-      });
+      if (normalized === lastSavedRef.current) {
+        return;
+      }
+
+      recordHistoryEntry('edit', normalized, createSnapshot({ primaryText: normalized }), undefined, 'Edited the primary JSON.');
     }, 1200);
 
     return () => window.clearTimeout(timeout);
@@ -441,7 +598,7 @@ export function JsonLabWorkspace() {
       : 'success'
     : 'error';
 
-  const currentNotice = notice ?? (isBlankWorkspace ? { tone: 'info', text: 'Choose a sample below to populate the editor, tree, diff, and schema panels in one click.' } : { tone: validationTone, text: validationMessage });
+  const currentNotice = notice ?? (isBlankWorkspace ? { tone: 'info', text: 'Load a sample or import JSON to unlock search, history, and output views.' } : { tone: validationTone, text: validationMessage });
 
   const handleFormat = () => {
     if (!primaryAnalysis.isValid) {
@@ -500,6 +657,20 @@ export function JsonLabWorkspace() {
 
     try {
       const text = await file.text();
+      suppressNextEditHistoryRef.current = true;
+      recordHistoryEntry(
+        'import',
+        text,
+        {
+          primaryText: text,
+          compareText,
+          schemaText,
+          outputTab: 'tree',
+          selectedPath: null
+        },
+        file.name,
+        `Imported ${file.name}.`
+      );
       startTransition(() => setPrimaryText(text));
       setNotice({ tone: 'success', text: `Imported ${file.name}.` });
     } catch {
@@ -589,6 +760,41 @@ export function JsonLabWorkspace() {
       run: resetWorkspace,
       disabled: isBlankWorkspace,
       keywords: ['clear', 'blank', 'start over']
+    },
+    {
+      id: 'open-search',
+      label: 'Open search panel',
+      description: 'Focus Search & Jump and search the current JSON.',
+      group: 'Navigation',
+      run: () => handleOpenSearch('all'),
+      disabled: isBlankWorkspace,
+      keywords: ['search', 'find', 'jump', 'filter']
+    },
+    {
+      id: 'jump-to-path',
+      label: 'Jump to path',
+      description: 'Open Search & Jump in path mode and focus the input.',
+      group: 'Navigation',
+      run: () => handleOpenSearch('paths'),
+      disabled: isBlankWorkspace,
+      keywords: ['path', 'tree', 'locate', 'select']
+    },
+    {
+      id: 'open-history',
+      label: 'Open history timeline',
+      description: 'Scroll to the history timeline with restore and compare actions.',
+      group: 'Navigation',
+      run: handleOpenHistory,
+      disabled: isBlankWorkspace,
+      keywords: ['history', 'timeline', 'restore', 'compare']
+    },
+    {
+      id: 'show-onboarding',
+      label: 'Show onboarding',
+      description: 'Replay the first-run walkthrough and workspace hints.',
+      group: 'Help',
+      run: handleOpenOnboarding,
+      keywords: ['tour', 'walkthrough', 'help', 'guide']
     },
     {
       id: 'sample-api',
@@ -778,7 +984,7 @@ export function JsonLabWorkspace() {
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                 {isBlankWorkspace
-                  ? 'Use the command palette to load samples, import files, or jump to the right view. Everything updates together.'
+                  ? 'Use the command palette to load samples or import files first. Search and history appear once the workspace has data.'
                   : 'The editor, tree, diff, schema, and export tools stay in one workspace so the flow stays focused.'}
               </p>
             </div>
@@ -798,12 +1004,18 @@ export function JsonLabWorkspace() {
                 </>
               )}
             </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1.5">Ctrl / Cmd + K opens the command palette</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1.5">Search &amp; jump highlights paths in the tree</span>
+              <span className="rounded-full border border-border/70 bg-background/70 px-3 py-1.5">History keeps edits, imports, and samples</span>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:max-w-[30rem] lg:justify-end">
             {isBlankWorkspace ? (
               <>
-                <WorkspaceCommandPalette commands={workspaceCommands} triggerVariant="secondary" />
+                <WorkspaceCommandPalette commands={workspaceCommands} triggerVariant="secondary" openSignal={paletteOpenToken} />
                 <Button type="button" onClick={() => loadSample(WORKSPACE_SAMPLES[0])} className="rounded-full px-5 shadow-glow">
                   <Sparkles className="h-4 w-4" />
                   Load API sample
@@ -815,7 +1027,7 @@ export function JsonLabWorkspace() {
               </>
             ) : (
               <>
-                <WorkspaceCommandPalette commands={workspaceCommands} triggerVariant="secondary" />
+                <WorkspaceCommandPalette commands={workspaceCommands} triggerVariant="secondary" openSignal={paletteOpenToken} />
                 <Button type="button" variant="secondary" onClick={handleValidate} className="rounded-full px-5 shadow-sm">
                   <CheckCircle2 className="h-4 w-4" />
                   Validate
@@ -895,11 +1107,23 @@ export function JsonLabWorkspace() {
         </AnimatePresence>
       </motion.section>
 
+      <AnimatePresence initial={false}>
+        {showOnboarding ? (
+          <WorkspaceOnboarding
+            open={showOnboarding}
+            onDismiss={handleDismissOnboarding}
+            onOpenSearch={() => handleOpenSearch('all')}
+            onOpenHistory={handleOpenHistory}
+            onOpenPalette={handleOpenPalette}
+          />
+        ) : null}
+      </AnimatePresence>
+
       {isBlankWorkspace ? (
         <WorkspaceEmptyState samples={WORKSPACE_SAMPLES} onLoadSample={loadSample} onImport={handleImportClick} />
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_380px]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_420px]">
             <div className="space-y-6">
               <JsonEditor
                 label="Primary JSON"
@@ -927,7 +1151,18 @@ export function JsonLabWorkspace() {
             <aside className="space-y-4">
               <div className="space-y-1">
                 <h3 className="text-lg font-semibold tracking-tight">Inspector</h3>
-                <p className="text-sm text-muted-foreground">Separate the secondary editor, history, and state into focused cards.</p>
+                <p className="text-sm text-muted-foreground">Search, compare, and history stay in separate cards so each task reads clearly.</p>
+              </div>
+
+              <div ref={searchPanelRef} className="scroll-mt-24">
+                <WorkspaceSearchPanel
+                  analysis={primaryAnalysis}
+                  selectedPath={selectedPath}
+                  onJumpToPath={handleJumpToPath}
+                  focusToken={searchFocusToken}
+                  defaultMode={searchMode}
+                  onModeChange={setSearchMode}
+                />
               </div>
 
               <Card className="border-border/70 bg-card/95 shadow-soft">
@@ -982,86 +1217,28 @@ export function JsonLabWorkspace() {
                       ) : null}
                     </TabsContent>
                   </Tabs>
+
+                  <div className="grid gap-3 border-t border-border/60 pt-4 sm:grid-cols-2">
+                    <StatusRow label="Selected path" value={selectedPath ?? 'None selected'} />
+                    <StatusRow label="Validation" value={validationMessage} muted={!primaryAnalysis.isValid || Boolean(schemaValidation.compileError) || Boolean(schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid)} />
+                    <StatusRow label="Line / column" value={primaryAnalysis.error?.line ? `${primaryAnalysis.error.line}:${primaryAnalysis.error.column ?? 1}` : 'No parse issue'} />
+                    <StatusRow label="Schema rules" value={schemaAnalysis.isValid && schemaAnalysis.value ? `${schemaValidation.errors.length} error(s)` : 'Not active'} />
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-border/70 bg-card/95 shadow-soft">
-                <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
-                  <div>
-                    <CardTitle className="text-base">Recent snippets</CardTitle>
-                    <CardDescription>Stored locally in the browser for quick recall.</CardDescription>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => {
-                      clearRecentSnippets();
-                      setRecentSnippets([]);
-                      setNotice({ tone: 'success', text: 'Recent snippets cleared.' });
-                    }}
-                  >
-                    Clear
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {recentSnippets.length > 0 ? (
-                    <ScrollArea className="json-scrollbar max-h-[240px] pr-2">
-                      <div className="space-y-2">
-                        {recentSnippets.map((snippet) => (
-                          <button
-                            key={snippet.id}
-                            type="button"
-                            className="group w-full rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-left transition hover:border-primary/40 hover:bg-muted/40"
-                            onClick={() => {
-                              startTransition(() => setPrimaryText(snippet.content));
-                              setNotice({ tone: 'info', text: `Loaded ${snippet.title} from history.` });
-                            }}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-sm font-medium text-foreground">{snippet.title}</span>
-                              <Badge variant="outline" className="rounded-full px-2 py-0 text-[10px] uppercase tracking-[0.18em]">
-                                {new Date(snippet.savedAt).toLocaleDateString()}
-                              </Badge>
-                            </div>
-                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{snippet.content.slice(0, 120)}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                      Recent snippets will appear here after the primary JSON settles.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/70 bg-card/95 shadow-soft">
-                <CardHeader className="space-y-2 border-b border-border/60 pb-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="text-base">Workspace status</CardTitle>
-                      <CardDescription>Current selection and validation details.</CardDescription>
-                    </div>
-                    <Badge variant={primaryAnalysis.isValid ? 'success' : 'destructive'} className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]">
-                      {primaryAnalysis.isValid ? 'Healthy' : 'Needs attention'}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm pt-5">
-                  <StatusRow label="Selected path" value={selectedPath ?? 'None selected'} />
-                  <StatusRow label="Validation" value={validationMessage} muted={!primaryAnalysis.isValid || Boolean(schemaValidation.compileError) || Boolean(schemaAnalysis.isValid && schemaAnalysis.value && !schemaValidation.valid)} />
-                  <StatusRow label="Line / column" value={primaryAnalysis.error?.line ? `${primaryAnalysis.error.line}:${primaryAnalysis.error.column ?? 1}` : 'No parse issue'} />
-                  <StatusRow label="Leaf count" value={`${stats.leaves.toLocaleString()}`} />
-                  <StatusRow label="Schema rules" value={schemaAnalysis.isValid && schemaAnalysis.value ? `${schemaValidation.errors.length} error(s)` : 'Not active'} />
-                </CardContent>
-              </Card>
+              <div ref={historyPanelRef} className="scroll-mt-24">
+                <WorkspaceHistoryTimeline
+                  entries={recentSnippets}
+                  onRestore={handleRestoreHistoryEntry}
+                  onCompare={handleCompareHistoryEntry}
+                  onClear={handleClearHistory}
+                />
+              </div>
             </aside>
           </div>
 
-          <section className="space-y-4">
+          <section ref={outputSectionRef} className="space-y-4 scroll-mt-24">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold tracking-tight">Output Studio</h3>
